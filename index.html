@@ -53,6 +53,10 @@
             margin-bottom: 10px;
             padding: 10px 15px;
         }
+        
+        .hide {
+            display: none!important;
+        }
     </style>
 </head>
 
@@ -60,6 +64,9 @@
     <header>
         <nav>
             <h1>Welcome !</h1>
+            <h2 class="winner"></h2>
+            <h3 id="room-info"></h3>
+            <h4 id="current-turn"></h4>
         </nav>
     </header>
     <main>
@@ -68,16 +75,22 @@
 
         <!-- Game Status -->
         <div class="actions">
-            <input type="text" name="room-name">
-            <button class="btn" onclick="leaveMatch()">Leave Match</button>
-            <button class="btn" onclick="createRoom()">Create Room</button>
-            <button class="btn" onclick="joinRoom()">Join Room</button>
-            <button class="btn" onclick="makeMove()">Make a Game Move</button>
+            <input type="text" name="room-name" placeholder="Create or Join a Room">
+            <button class="btn" id="createRoom" onclick="createRoom()">Create Room</button>
+            <button class="btn" id="leaveMatch" onclick="leaveMatch()">Leave Match</button>
+            <button class="btn" id="joinRoom" onclick="joinRoom()">Join Room</button>
+            <button class="btn" id="restartGame" onclick="restartGame()">Restart Game</button>
         </div>
     </main>
 
     <!-- Dom Updation Functions -->
     <script>
+        const roomNameInput = document.querySelector('input[name="room-name"]');
+        const createRoomButton = document.getElementById('createRoom');
+        const joinRoomButton = document.getElementById('joinRoom');
+        const leaveMatchButton = document.getElementById('leaveMatch');
+        const restartGameButton = document.getElementById('restartGame');
+
         function renderBoard() {
             const cells = state.cells.map((cell, id) => `
                     <div class="cell" data-id="${id}">
@@ -88,11 +101,51 @@
             board.innerHTML = cells;
         }
 
+        function restartGame() {
+            emitRestartGame();
+        }
+
+        function hideElement(element) {
+            element.classList.add('hide');
+        }
+
+        function showElement(element) {
+            element.classList.remove('hide');
+        }
+
+        function declareWinner() {
+            const winner = state.winner;
+            const winnerElement = document.querySelector('.winner');
+            winnerElement.innerHTML = `${winner} is the winner!`;
+            showElement(winnerElement);
+        }
+
+        function renderButtons() {
+            if (!gameLocalState.gameStarted) {
+                showElement(createRoomButton);
+                showElement(joinRoomButton);
+                showElement(roomNameInput);
+                hideElement(leaveMatchButton);
+            } else {
+                hideElement(createRoomButton);
+                hideElement(joinRoomButton);
+                hideElement(roomNameInput);
+                showElement(leaveMatchButton);
+            }
+        }
+
         function updateState(newState) {
             state.cells = newState.cells;
             state.currentPlayer = newState.currentPlayer;
+            const currentTurn = document.getElementById('current-turn');
+            currentTurn.innerHTML = `Current Turn: ${state.currentPlayer}`;
             state.winner = newState.winner;
             renderBoard();
+            if (state.winner) {
+                declareWinner();
+                showElement(restartGameButton);
+                return;
+            }
         }
     </script>
 
@@ -138,30 +191,51 @@
         const socket = io();
 
         function leaveMatch() {
-            console.log('Button Clicked');
-            socket.emit('leave', {
-                room: 'test'
-            });
+            // console.log('Button Clicked');
+            // socket.emit('leave', {
+            //     room: gameLocalState.room
+            // });
+            window.location.href = '/';
         }
 
         function createRoom() {
-            console.log('Button Clicked');
+            const roomName = roomNameInput.value;
+            if (roomName === '') {
+                alert('Please enter a room name');
+                return;
+            }
+            // disable the input
+            roomNameInput.disabled = true;
             socket.emit('create', {
-                room: 'test',
+                room: roomName,
             });
         }
 
+        function emitRestartGame() {
+            socket.emit('restart-game', {
+                room: gameLocalState.room
+            });
+            const winnerElement = document.querySelector('.winner');
+            winnerElement.innerHTML = '';
+            hideElement(winnerElement);
+
+        }
+
         function joinRoom() {
-            console.log('Button Clicked');
+            const roomName = roomNameInput.value;
+            if (roomName === '') {
+                alert('Please enter a room name');
+                return;
+            }
             socket.emit('join', {
-                room: 'test'
+                room: roomName
             });
         }
 
         function makeMove() {
             socket.emit('game-move', {
                 player: gameLocalState.player,
-                room: 'test',
+                room: gameLocalState.room,
                 cells: state.cells
             });
         }
@@ -170,11 +244,18 @@
             console.log(`Joined Room: `, payload);
             gameLocalState.room = payload.room;
             gameLocalState.player = payload.player;
+            renderButtons();
         });
 
         socket.on('start-game', (payload) => {
             console.log(`Game Started: `, payload);
             gameLocalState.gameStarted = true;
+            renderButtons();
+            hideElement(restartGameButton);
+            const roomInfo = document.getElementById('room-info');
+            const currentTurn = document.getElementById('current-turn');
+            currentTurn.innerHTML = `Current Turn: X`;
+            roomInfo.innerHTML = `Game started in Room: ${gameLocalState.room}`;
         });
 
         socket.on('error', (msg) => {

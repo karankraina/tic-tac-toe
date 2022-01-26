@@ -52,6 +52,16 @@ function removeFromRoom(room, user) {
     });
 }
 
+function restartGameInRoom(room) {
+    const roomToRestart = rooms.find((availableRoom) => availableRoom.name === room);
+    roomToRestart.state = {
+        currentPlayer: players.primary,
+        cells: Array.from(Array(9).keys()).map(() => ''),
+        winner: null
+    };
+    return roomToRestart.state;
+}
+
 function addRoom(room) {
     const roomToAdd = {
         name: room,
@@ -206,6 +216,11 @@ io.on("connection", (socket) => {
         socket.leave(payload.room);
     });
 
+    socket.on("restart-game", (payload) => {
+        const room = payload.room;
+        const state = restartGameInRoom(room);
+        io.to(room).emit('game-move', state);
+    });
     socket.on('game-move', (payload) => {
         console.log("game-move", payload);
         // do some changes with state
